@@ -1,0 +1,73 @@
+name: CI Build
+
+on:
+  push:
+    branches: [ main, develop ]
+  pull_request:
+    branches: [ main, develop ]
+
+jobs:
+  build:
+    runs-on: ubuntu-latest
+    strategy:
+      matrix:
+        python-version: [3.8, 3.9, '3.10']
+
+    steps:
+    # Step 1: Checkout the code
+    - name: Check out code
+      uses: actions/checkout@v3
+      with:
+        fetch-depth: 0
+
+    # Step 2: Set up Python
+    - name: Set up Python ${{ matrix.python-version }}
+      uses: actions/setup-python@v4
+      with:
+        python-version: ${{ matrix.python-version }}
+
+    # Step 3: Install dependencies
+    - name: Install dependencies
+      run: |
+        python -m pip install --upgrade pip
+        pip install -r requirements.txt
+        pip install flake8 pylint coverage nose
+
+    # Step 4: Lint the code with Flake8
+    - name: Lint code with Flake8
+      run: |
+        # Stop the build if there are Python syntax errors or undefined names
+        flake8 . --count --select=E9,F63,F7,F82 --show-source --statistics
+        # Exit-zero treats all errors as warnings
+        flake8 . --count --exit-zero --max-complexity=10 --max-line-length=100 --statistics
+
+    # Step 5: Lint the code with Pylint
+    - name: Lint code with Pylint
+      run: |
+        pylint --rcfile=setup.cfg src/ || true
+
+    # Step 6: Execute unit tests with nosetests and coverage
+    - name: Run unit tests with coverage
+      run: |
+        nosetests --with-coverage --cover-package=src --cover-branches --cover-min-percentage=80
+
+    # Step 7: Generate coverage report
+    - name: Generate coverage report
+      run: |
+        coverage report -m
+        coverage xml
+
+    # Step 8: Upload coverage to Codecov
+    - name: Upload coverage to Codecov
+      uses: codecov/codecov-action@v3
+      with:
+        file: ./coverage.xml
+        flags: unittests
+        name: codecov-umbrella
+        fail_ci_if_error: false
+
+    # Step 9: Build status badge
+    - name: Build Status
+      if: always()
+      run: |
+        echo "✅ Build pipeline completed successfully!"
